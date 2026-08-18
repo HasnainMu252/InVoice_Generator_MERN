@@ -6,10 +6,12 @@ import morgan from "morgan";
 
 import { errorHandler, notFound } from "./middleware/error.js";
 import { requireAuth } from "./middleware/auth.js";
+import { requireAdmin } from "./middleware/roles.js";
 import authRoutes from "./routes/auth.routes.js";
 import invoiceRoutes from "./routes/invoice.routes.js";
 import orderRoutes from "./routes/order.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
+import userRoutes from "./routes/user.routes.js";
 
 export function createApp() {
   const app = express();
@@ -21,7 +23,7 @@ export function createApp() {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "12mb" })); // bulk imports post large JSON payloads
   if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 
   // Brute-force protection on the only unauthenticated endpoint.
@@ -36,6 +38,8 @@ export function createApp() {
   app.use("/api/invoices", requireAuth, invoiceRoutes);
   app.use("/api/orders", requireAuth, orderRoutes);
   app.use("/api/settings", requireAuth, settingsRoutes);
+  // User management is the one area staff cannot reach.
+  app.use("/api/users", requireAuth, requireAdmin, userRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

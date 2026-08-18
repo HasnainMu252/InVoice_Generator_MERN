@@ -6,8 +6,16 @@ const userSchema = new mongoose.Schema(
     username: { type: String, required: true, unique: true, trim: true },
     // Stored as a bcrypt hash — never the plain value.
     password: { type: String, required: true, select: false },
-    full_name: { type: String, default: "CGS Administrator" },
-    role: { type: String, enum: ["admin", "staff"], default: "admin" },
+    full_name: { type: String, default: "" },
+    email: { type: String, default: "" },
+    phone: { type: String, default: "" },
+    /**
+     * admin — everything, including user management.
+     * staff — everything except user management.
+     */
+    role: { type: String, enum: ["admin", "staff"], default: "staff" },
+    active: { type: Boolean, default: true },
+    last_login_at: { type: Date, default: null },
   },
   { timestamps: true },
 );

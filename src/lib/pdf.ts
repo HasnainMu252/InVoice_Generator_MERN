@@ -1,10 +1,10 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import type { Invoice, Settings } from "@/lib/data";
+import type { Invoice, Order, Settings } from "@/lib/data";
 import { amountInWords, formatDate, formatNumber, formatPKR } from "@/lib/format";
 // PNG logo from assets folder
-import CGSLOGO from "../assets/CGSLOGO.png";
+import CGSLOGO from "../assets/CGS-04.svg";
 
 const BRAND: [number, number, number] = [0, 0, 150];
 const INK: [number, number, number] = [28, 30, 46];
@@ -12,6 +12,13 @@ const SOFT: [number, number, number] = [242, 243, 250];
 const GRAY: [number, number, number] = [110, 114, 133];
 
 type LoadedLogo = { dataUrl: string; aspect: number };
+
+/**
+ * Max raster width for the embedded logo. The source PNG is 1500px wide, but the
+ * logo is only ever drawn at ~56mm — 480px is well beyond 300dpi for that size,
+ * and shrinks the embedded image from ~72KB to ~19KB.
+ */
+const LOGO_RASTER_WIDTH = 480;
 
 let logoCache: LoadedLogo | null | undefined;
 
@@ -36,9 +43,12 @@ async function loadLogo(): Promise<LoadedLogo | null> {
           }
 
           const aspect = width / height;
+          // Downscale before embedding — see LOGO_RASTER_WIDTH.
+          const targetW = Math.min(width, LOGO_RASTER_WIDTH);
+          const targetH = Math.round(targetW / aspect);
           const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
+          canvas.width = targetW;
+          canvas.height = targetH;
 
           const ctx = canvas.getContext("2d");
           if (!ctx) {
@@ -46,12 +56,16 @@ async function loadLogo(): Promise<LoadedLogo | null> {
             return;
           }
 
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
           // White background for PDF printing
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
+          ctx.fillRect(0, 0, targetW, targetH);
+          ctx.drawImage(img, 0, 0, targetW, targetH);
 
-          resolve({ dataUrl: canvas.toDataURL("image/png"), aspect });
+          // JPEG rather than PNG: the plate is already opaque white, so there is
+          // no alpha to preserve, and JPEG is ~40% smaller at this size.
+          resolve({ dataUrl: canvas.toDataURL("image/jpeg", 0.92), aspect });
         } catch (error) {
           console.error("Failed to process logo:", error);
           resolve(null);
@@ -79,7 +93,8 @@ export async function buildInvoicePdf(
   invoice: Invoice,
   settings: Settings | null,
 ): Promise<jsPDF> {
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  // compress: true deflates the content streams — the single biggest size win.
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const M = 14;
@@ -99,7 +114,7 @@ export async function buildInvoicePdf(
     const logoW = 56;
     const logoH = logoW / logo.aspect;
     try {
-      doc.addImage(logo.dataUrl, "PNG", M, 9, logoW, logoH);
+      doc.addImage(logo.dataUrl, "JPEG", M, 9, logoW, logoH, undefined, "FAST");
     } catch (error) {
       console.error("Failed to add logo to PDF:", error);
     }
@@ -160,7 +175,7 @@ export async function buildInvoicePdf(
 
   const toLines = [
     invoice.to_company || "—",
-    invoice.to_contact_person ? `Attn: ${invoice.to_contact_person}` : "",
+    invoice.to_contact_person ? `Name: ${invoice.to_contact_person}` : "",
     invoice.to_address,
     invoice.to_phone,
     invoice.to_email,
@@ -376,6 +391,19 @@ export async function buildInvoicePdf(
   const pages = doc.getNumberOfPages();
   for (let p = 1; p <= pages; p += 1) {
     doc.setPage(p);
+
+    // Sits above the footer rule at pageH-18. Body content is capped at pageH-26
+    // by ensureSpace(), so this band is always clear.
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAY);
+    doc.text(
+      "This is a system-generated invoice and does not require a signature or stamp.",
+      pageW / 2,
+      pageH - 22,
+      { align: "center" },
+    );
+
     doc.setDrawColor(225, 227, 240);
     doc.line(M, pageH - 18, pageW - M, pageH - 18);
 
@@ -429,6 +457,217 @@ export async function printInvoicePdf(invoice: Invoice, settings: Settings | nul
 }
 
 /* -------------------------------------------------------------------------- */
+/*                              ORDER DETAIL PDF                              */
+/* -------------------------------------------------------------------------- */
+export async function buildOrderPdf(order: Order, settings: Settings | null): Promise<jsPDF> {
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const M = 14;
+
+  const logo = await loadLogo();
+  const company = settings?.company_name || "CORPORATE GIFTING SOLUTION";
+
+  /* --------------------------------- header -------------------------------- */
+  if (logo) {
+    const logoW = 56;
+    try {
+      doc.addImage(logo.dataUrl, "JPEG", M, 9, logoW, logoW / logo.aspect, undefined, "FAST");
+    } catch {
+      /* ignore */
+    }
+  } else {
+    doc.setTextColor(...BRAND);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(company, M, 18);
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(...BRAND);
+  doc.text("ORDER DETAIL", pageW - M, 20, { align: "right" });
+  doc.setDrawColor(...BRAND);
+  doc.setLineWidth(0.8);
+  doc.line(M, 30, pageW - M, 30);
+  doc.setLineWidth(0.2);
+
+  /* -------------------------------- meta row ------------------------------- */
+  let y = 38;
+  doc.setFillColor(...SOFT);
+  doc.roundedRect(M, y, pageW - M * 2, 16, 2, 2, "F");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.setFont("helvetica", "normal");
+  doc.text("ORDER CODE", M + 4, y + 6);
+  doc.text("ORDER DATE", M + 62, y + 6);
+  doc.text("MONTH", M + 116, y + 6);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...INK);
+  doc.text(order.order_code, M + 4, y + 12);
+  doc.text(formatDate(order.order_date), M + 62, y + 12);
+  doc.text(order.month || "—", M + 116, y + 12);
+
+  /* ------------------------------ client block ----------------------------- */
+  y += 24;
+  const colW = (pageW - M * 2 - 6) / 2;
+  const clientLines = [
+    order.company || "—",
+    order.contact_person ? `Attn: ${order.contact_person}` : "",
+    order.contact_number,
+  ].filter(Boolean);
+  const detailLines = doc.splitTextToSize(order.details || "—", colW - 6).slice(0, 5);
+  const boxH = Math.max(clientLines.length, detailLines.length) * 4.6 + 14;
+
+  const drawBox = (x: number, title: string, lines: string[]) => {
+    doc.setDrawColor(225, 227, 240);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, colW, boxH, 2, 2, "FD");
+    doc.setFillColor(...BRAND);
+    doc.rect(x, y, colW, 6, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.text(title, x + 3, y + 4.2);
+    doc.setTextColor(...INK);
+    doc.setFontSize(9);
+    lines.forEach((line, i) => {
+      doc.setFont("helvetica", i === 0 ? "bold" : "normal");
+      doc.text(line, x + 3, y + 12 + i * 4.6);
+    });
+  };
+  drawBox(M, "CLIENT", clientLines);
+  drawBox(M + colW + 6, "ORDER DETAILS", detailLines);
+
+  /* -------------------------------- service -------------------------------- */
+  y += boxH + 8;
+  doc.setFillColor(...SOFT);
+  doc.roundedRect(M, y, pageW - M * 2, 9, 2, 2, "F");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...GRAY);
+  doc.text("SERVICE", M + 4, y + 5.8);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...BRAND);
+  doc.text(order.service || "—", M + 26, y + 5.8);
+  y += 15;
+
+  /* --------------------------- expense breakdown --------------------------- */
+  const expenses = order.expenses ?? [];
+  autoTable(doc, {
+    startY: y,
+    margin: { left: M, right: M, top: 34, bottom: 30 },
+    head: [["S.No", "Category", "Description", "Amount"]],
+    body: expenses.length
+      ? expenses.map((e, i) => [
+          String(i + 1),
+          e.category,
+          e.description || "—",
+          formatNumber(e.amount),
+        ])
+      : [["—", "—", "No expenses recorded for this order", "0"]],
+    styles: {
+      font: "helvetica",
+      fontSize: 9,
+      cellPadding: 2.6,
+      textColor: INK,
+      lineColor: [228, 230, 242],
+      lineWidth: 0.2,
+    },
+    headStyles: { fillColor: BRAND, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8.5 },
+    alternateRowStyles: { fillColor: [249, 250, 254] },
+    columnStyles: {
+      0: { cellWidth: 14, halign: "center" },
+      1: { cellWidth: 32 },
+      3: { cellWidth: 36, halign: "right" },
+    },
+  });
+
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  if (y > pageH - 80) {
+    doc.addPage();
+    y = 34;
+  }
+
+  /* --------------------------------- totals -------------------------------- */
+  const totalsW = 90;
+  const tx = pageW - M - totalsW;
+  const rows: Array<[string, string]> = [
+    ["Total Order Amount", formatPKR(order.total_amount)],
+    ["Less: Total Expense", `-${formatPKR(order.expense_total)}`],
+    ["Less: Tax", `-${formatPKR(order.tax)}`],
+  ];
+
+  doc.setDrawColor(225, 227, 240);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(tx, y, totalsW, rows.length * 6.5 + 15, 2, 2, "FD");
+
+  let ty = y + 6.5;
+  rows.forEach(([label, value]) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...GRAY);
+    doc.text(label, tx + 4, ty);
+    doc.setTextColor(...INK);
+    doc.text(value, tx + totalsW - 4, ty, { align: "right" });
+    ty += 6.5;
+  });
+
+  doc.setFillColor(...BRAND);
+  doc.roundedRect(tx, ty - 4, totalsW, 12, 2, 2, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.text("TOTAL PROFIT", tx + 4, ty + 3.6);
+  doc.text(formatPKR(order.profit), tx + totalsW - 4, ty + 3.6, { align: "right" });
+
+  /* --------------------------------- notes --------------------------------- */
+  if (order.notes?.trim()) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAY);
+    doc.text("NOTES", M, y + 4);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...INK);
+    doc.text(doc.splitTextToSize(order.notes.trim(), tx - M - 6).slice(0, 6), M, y + 10);
+  }
+
+  /* --------------------------------- footer -------------------------------- */
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p += 1) {
+    doc.setPage(p);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...GRAY);
+    doc.text(
+      "This is a system-generated order summary and does not require a signature or stamp.",
+      pageW / 2,
+      pageH - 22,
+      { align: "center" },
+    );
+    doc.setDrawColor(225, 227, 240);
+    doc.line(M, pageH - 18, pageW - M, pageH - 18);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...BRAND);
+    doc.text(company, M, pageH - 12);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...GRAY);
+    doc.setFontSize(7.5);
+    doc.text(`Page ${p} of ${pages}`, pageW - M, pageH - 12, { align: "right" });
+  }
+
+  return doc;
+}
+
+export async function downloadOrderPdf(order: Order, settings: Settings | null) {
+  const doc = await buildOrderPdf(order, settings);
+  doc.save(`${order.order_code}.pdf`);
+}
+
+/* -------------------------------------------------------------------------- */
 /*                             GENERIC TABLE PDF                              */
 /* -------------------------------------------------------------------------- */
 export async function exportTablePdf(options: {
@@ -444,6 +683,7 @@ export async function exportTablePdf(options: {
     unit: "mm",
     format: "a4",
     orientation: options.landscape ? "landscape" : "portrait",
+    compress: true,
   });
   const pageW = doc.internal.pageSize.getWidth();
 
@@ -455,7 +695,7 @@ export async function exportTablePdf(options: {
     const logoW = 44;
     const logoH = logoW / logo.aspect;
     try {
-      doc.addImage(logo.dataUrl, "PNG", 12, 4, logoW, logoH);
+      doc.addImage(logo.dataUrl, "JPEG", 12, 4, logoW, logoH, undefined, "FAST");
     } catch (error) {
       console.error("Failed to add report logo:", error);
     }

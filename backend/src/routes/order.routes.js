@@ -12,6 +12,7 @@ function buildPayload(body) {
     order_code: String(body.order_code ?? "").trim(),
     order_date,
     details: body.details ?? "",
+    company: body.company ?? "",
     contact_person: body.contact_person ?? "",
     contact_number: body.contact_number ?? "",
     total_amount: toNum(body.total_amount),
@@ -72,6 +73,60 @@ router.put(
     });
     if (!order) return res.status(404).json({ message: "Order not found" });
     return res.json(order);
+  }),
+);
+
+/**
+ * Bulk import. Rows arrive already parsed from the .xlsx on the client; the
+ * server still rebuilds every payload so imported data goes through exactly the
+ * same validation and month/expense normalisation as the form.
+ */
+router.post(
+  "/bulk",
+  asyncHandler(async (req, res) => {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ message: "No rows to import" });
+    if (rows.length > 2000) {
+      return res.status(400).json({ message: "Too many rows — import 2000 at a time or fewer." });
+    }
+
+    const mode = req.body?.mode === "replace" ? "replace" : "append";
+    if (mode === "replace") await Order.deleteMany({});
+
+    const created = [];
+    const errors = [];
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const rowNumber = i + 2; // +2: header row, and spreadsheets are 1-indexed
+      try {
+        const payload = buildPayload(rows[i]);
+        if (!payload.order_code) {
+          errors.push({ row: rowNumber, message: "Order Code is required" });
+          continue;
+        }
+        // Upsert on order_code so re-importing an exported file updates rather
+        // than exploding on the unique index.
+        const saved = await Order.findOneAndUpdate(
+          { order_code: payload.order_code },
+          payload,
+          { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+        );
+        created.push(saved.order_code);
+      } catch (error) {
+        errors.push({ row: rowNumber, message: error.message });
+      }
+    }
+
+    return res.json({ imported: created.length, failed: errors.length, errors: errors.slice(0, 50) });
+  }),
+);
+
+/** Deletes every order. Irreversible — the UI requires a typed confirmation. */
+router.delete(
+  "/",
+  asyncHandler(async (_req, res) => {
+    const { deletedCount } = await Order.deleteMany({});
+    res.json({ message: `Deleted ${deletedCount} order(s)`, deleted: deletedCount });
   }),
 );
 

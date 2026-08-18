@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { useInvoice, useSettings } from "@/lib/data";
 import { amountInWords, formatDate, formatPKR } from "@/lib/format";
-import { downloadInvoicePdf, printInvoicePdf } from "@/lib/pdf";
+import { downloadInvoicePdf, printInvoicePdf } from "@/lib/pdf-lazy";
 
 
 function Row({ label, value }: { label: string; value: string }) {

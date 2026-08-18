@@ -88,8 +88,9 @@ export function normaliseExpenses(list) {
     }));
 }
 
-/** Order maths: Total Profit = Total Order Amount − Total Expense Amount. */
-export function computeOrderTotals(expenses) {
+/** Order maths: Total Profit = Total Order Amount − Total Expense Amount − Tax. */
+export function computeOrderTotals(expenses, total_amount = 0, tax = 0) {
   const expense_total = money((expenses ?? []).reduce((sum, e) => sum + toNum(e.amount), 0));
-  return { expense_total };
+  const profit = money(toNum(total_amount) - expense_total - toNum(tax));
+  return { expense_total, profit };
 }

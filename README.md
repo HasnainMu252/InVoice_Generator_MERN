@@ -137,6 +137,16 @@ All routes except `/api/auth/login` and `/api/health` require `Authorization: Be
 | `DELETE` | `/api/orders/:id`           | Delete                                 |
 | `GET`    | `/api/settings`             | Company/bank/invoice defaults          |
 | `PUT`    | `/api/settings`             | Update settings                        |
+| `PUT`    | `/api/auth/profile`         | Update your own name/email/phone       |
+| `POST`   | `/api/orders/bulk`          | Excel bulk import                      |
+| `DELETE` | `/api/orders`               | Delete **all** orders                  |
+| `POST`   | `/api/invoices/bulk`        | Excel bulk import                      |
+| `DELETE` | `/api/invoices`             | Delete **all** invoices                |
+| `GET`    | `/api/users`                | List users *(admin)*                   |
+| `POST`   | `/api/users`                | Create user *(admin)*                  |
+| `PUT`    | `/api/users/:id`            | Update user *(admin)*                  |
+| `PATCH`  | `/api/users/:id/password`   | Reset a user's password *(admin)*      |
+| `DELETE` | `/api/users/:id`            | Delete user *(admin)*                  |
 
 ---
 
@@ -159,12 +169,41 @@ grand total  = before tax + tax
 
 ```
 Total Expense Amount = Σ expense breakdown rows
-Total Profit Amount  = Total Order Amount − Total Expense Amount
+Total Profit Amount  = Total Order Amount − Total Expense Amount − Tax
 ```
 
-Tax is **not** deducted from profit — it's tracked as a separate informational field.
+Tax **is** deducted from profit: it is collected on behalf of the government and
+passed through, so it never counts as business earnings.
+
+Example: order 100,000, expenses 20,000, tax 5,000 → profit **75,000**.
 
 ---
+
+## Roles
+
+| | Administrator | Staff |
+| --- | --- | --- |
+| Orders, invoices, reports, settings | Yes | Yes |
+| Bulk import / export / delete all | Yes | Yes |
+| Change own password | Yes | Yes |
+| Manage user accounts | Yes | **No** |
+
+Roles are enforced server-side. The system refuses to remove or demote the last
+active administrator, so you cannot lock yourself out.
+
+## Excel import / export
+
+Export and import share one schema — a downloaded file can be edited and uploaded
+straight back. Each workbook has two sheets:
+
+| Workbook | Sheets |
+| --- | --- |
+| Orders | `Orders` + `Order Expenses` (linked by Order Code) |
+| Invoices | `Invoices` + `Invoice Items` (linked by Invoice Number) |
+
+Import matches on Order Code / Invoice Number: existing records are updated, new
+ones created. "Delete everything first" mode is available in the import dialog.
+Use the **Template** button for a blank workbook with the right headers.
 
 ## Data model
 

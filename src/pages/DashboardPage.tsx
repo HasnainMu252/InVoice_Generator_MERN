@@ -55,7 +55,7 @@ export default function DashboardPage() {
     return {
       totalOrderAmount,
       totalExpenses,
-      totalProfit: totalOrderAmount - totalExpenses,
+      totalProfit: totalOrderAmount - totalExpenses - totalTax,
       totalTax,
       totalOrders: orderRows.length,
       totalInvoices: invoiceRows.length,
@@ -66,7 +66,10 @@ export default function DashboardPage() {
   }, [orders.data, expenseRows, invoices.data]);
 
   const monthly = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; amount: number; expenses: number }>();
+    const map = new Map<
+      string,
+      { key: string; label: string; amount: number; expenses: number; tax: number }
+    >();
     const ensure = (date: string) => {
       const key = monthKey(date);
       if (!key) return null;
@@ -77,13 +80,17 @@ export default function DashboardPage() {
           label: d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
           amount: 0,
           expenses: 0,
+          tax: 0,
         });
       }
       return map.get(key)!;
     };
     (orders.data ?? []).forEach((o) => {
       const row = ensure(o.order_date);
-      if (row) row.amount += toNum(o.total_amount);
+      if (row) {
+        row.amount += toNum(o.total_amount);
+        row.tax += toNum(o.tax);
+      }
     });
     expenseRows.forEach((e) => {
       const row = ensure(e.expense_date);
@@ -91,7 +98,7 @@ export default function DashboardPage() {
     });
     return [...map.values()]
       .sort((a, b) => a.key.localeCompare(b.key))
-      .map((r) => ({ ...r, profit: r.amount - r.expenses }));
+      .map((r) => ({ ...r, profit: r.amount - r.expenses - r.tax }));
   }, [orders.data, expenseRows]);
 
   const byService = useMemo(() => {
@@ -130,14 +137,14 @@ export default function DashboardPage() {
       }
     >
       {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-2xl" />
           ))}
         </div>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
             <StatCard
               label="Total Order Amount"
               value={formatPKR(stats.totalOrderAmount)}
@@ -167,7 +174,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <StatCard
               label="Approved Invoices"
               value={String(stats.approved)}
@@ -188,12 +195,12 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="mt-6 grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
             <div className="rounded-2xl border border-border bg-card p-5 shadow-card lg:col-span-2">
               <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted-foreground">
                 Monthly Order Amount vs Expenses
               </h3>
-              <div className="mt-4 h-72">
+              <div className="mt-4 h-64 w-full min-w-0 overflow-hidden sm:h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthly}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8f2" />
@@ -220,7 +227,7 @@ export default function DashboardPage() {
               <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted-foreground">
                 Invoice Status
               </h3>
-              <div className="mt-4 h-72">
+              <div className="mt-4 h-64 w-full min-w-0 overflow-hidden sm:h-72">
                 {statusData.length ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -260,7 +267,7 @@ export default function DashboardPage() {
               <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted-foreground">
                 Monthly Profit Trend
               </h3>
-              <div className="mt-4 h-64">
+              <div className="mt-4 h-56 w-full min-w-0 overflow-hidden sm:h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={monthly}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e6e8f2" />
@@ -287,7 +294,7 @@ export default function DashboardPage() {
               <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted-foreground">
                 Orders by Service
               </h3>
-              <div className="mt-4 h-64">
+              <div className="mt-4 h-56 w-full min-w-0 overflow-hidden sm:h-64">
                 {byService.length ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -311,7 +318,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="mt-6 grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
             <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold uppercase tracking-[0.1em] text-muted-foreground">

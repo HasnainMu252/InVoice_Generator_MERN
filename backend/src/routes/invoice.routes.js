@@ -90,6 +90,64 @@ router.patch(
   }),
 );
 
+/**
+ * Bulk import. The client parses the workbook (Invoices + Invoice Items sheets)
+ * and posts assembled rows; totals are still recomputed server-side.
+ */
+router.post(
+  "/bulk",
+  asyncHandler(async (req, res) => {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!rows.length) return res.status(400).json({ message: "No rows to import" });
+    if (rows.length > 2000) {
+      return res.status(400).json({ message: "Too many rows — import 2000 at a time or fewer." });
+    }
+
+    const mode = req.body?.mode === "replace" ? "replace" : "append";
+    if (mode === "replace") await Invoice.deleteMany({});
+
+    const imported = [];
+    const errors = [];
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const rowNumber = i + 2;
+      try {
+        const row = rows[i];
+        if (!row?.invoice_number) {
+          errors.push({ row: rowNumber, message: "Invoice Number is required" });
+          continue;
+        }
+        if (!row?.invoice_date) {
+          errors.push({ row: rowNumber, message: "Invoice Date is required" });
+          continue;
+        }
+        const payload = { ...sanitise(row), ...computeInvoiceTotals(row) };
+        // Upsert on invoice_number so an exported file can be re-imported.
+        await Invoice.findOneAndUpdate({ invoice_number: row.invoice_number }, payload, {
+          new: true,
+          upsert: true,
+          runValidators: true,
+          setDefaultsOnInsert: true,
+        });
+        imported.push(row.invoice_number);
+      } catch (error) {
+        errors.push({ row: rowNumber, message: error.message });
+      }
+    }
+
+    return res.json({ imported: imported.length, failed: errors.length, errors: errors.slice(0, 50) });
+  }),
+);
+
+/** Deletes every invoice. Irreversible — the UI requires a typed confirmation. */
+router.delete(
+  "/",
+  asyncHandler(async (_req, res) => {
+    const { deletedCount } = await Invoice.deleteMany({});
+    res.json({ message: `Deleted ${deletedCount} invoice(s)`, deleted: deletedCount });
+  }),
+);
+
 router.delete(
   "/:id",
   asyncHandler(async (req, res) => {

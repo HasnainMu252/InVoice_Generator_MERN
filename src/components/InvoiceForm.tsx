@@ -25,7 +25,7 @@ import {
 } from "@/lib/data";
 import { apiMessage } from "@/lib/api";
 import { amountInWords, formatPKR, toNum } from "@/lib/format";
-import { downloadInvoicePdf } from "@/lib/pdf";
+import { downloadInvoicePdf } from "@/lib/pdf-lazy";
 
 type Draft = {
   invoice_number: string;

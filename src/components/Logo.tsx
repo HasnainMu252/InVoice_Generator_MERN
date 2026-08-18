@@ -1,4 +1,4 @@
-import CGSLOGO from "../assets/CGSLOGO.png";
+import CGSLOGO from "../assets/cgsWhite.svg";
 import { cn } from "@/lib/utils";
 
 export function Logo({

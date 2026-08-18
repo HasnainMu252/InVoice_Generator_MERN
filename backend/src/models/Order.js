@@ -24,6 +24,7 @@ const orderSchema = new mongoose.Schema(
     order_code: { type: String, required: true, unique: true, trim: true },
     order_date: { type: String, required: true },
     details: { type: String, default: "" },
+    company: { type: String, default: "" },
     contact_person: { type: String, default: "" },
     contact_number: { type: String, default: "" },
     total_amount: { type: Number, default: 0 },
@@ -43,9 +44,14 @@ orderSchema.virtual("expense_total").get(function expenseTotal() {
   return (this.expenses ?? []).reduce((sum, e) => sum + Number(e.amount || 0), 0);
 });
 
-/** Total Profit Amount = Total Order Amount − Total Expense Amount. */
+/**
+ * Total Profit Amount = Total Order Amount − Total Expense Amount − Tax.
+ *
+ * Tax is money collected on behalf of the government and passed straight through,
+ * so it is never part of what the business actually earns on an order.
+ */
 orderSchema.virtual("profit").get(function profit() {
-  return Number(this.total_amount || 0) - this.expense_total;
+  return Number(this.total_amount || 0) - this.expense_total - Number(this.tax || 0);
 });
 
 orderSchema.set("toJSON", {

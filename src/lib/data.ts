@@ -56,6 +56,7 @@ export type Order = {
   order_code: string;
   order_date: string;
   details: string;
+  company: string;
   contact_person: string;
   contact_number: string;
   total_amount: number;
@@ -146,6 +147,27 @@ export function useDeleteInvoice() {
   });
 }
 
+export function useDeleteAllInvoices() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await api.delete("/invoices")).data as { deleted: number },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["invoices"] }),
+  });
+}
+
+export function useImportInvoices() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ rows, mode }: { rows: unknown[]; mode: "append" | "replace" }) =>
+      (await api.post("/invoices/bulk", { rows, mode })).data as {
+        imported: number;
+        failed: number;
+        errors: Array<{ row: number; message: string }>;
+      },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["invoices"] }),
+  });
+}
+
 export async function nextInvoiceNumber(): Promise<string> {
   return (await api.get("/invoices/next-number")).data.invoice_number;
 }
@@ -194,8 +216,87 @@ export function useDeleteOrder() {
   });
 }
 
+export function useDeleteAllOrders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await api.delete("/orders")).data as { deleted: number },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+  });
+}
+
+export type BulkResult = {
+  imported: number;
+  failed: number;
+  errors: Array<{ row: number; message: string }>;
+};
+
+export function useImportOrders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ rows, mode }: { rows: unknown[]; mode: "append" | "replace" }) =>
+      (await api.post("/orders/bulk", { rows, mode })).data as BulkResult,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
+  });
+}
+
 export async function nextOrderCode(): Promise<string> {
   return (await api.get("/orders/next-code")).data.order_code;
+}
+
+/* ---------------------------------- users ---------------------------------- */
+
+export type AppUser = {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  role: "admin" | "staff";
+  active: boolean;
+  last_login_at: string | null;
+  createdAt: string;
+};
+
+export function useUsers(enabled = true) {
+  return useQuery({
+    queryKey: ["users"],
+    queryFn: async (): Promise<AppUser[]> => (await api.get("/users")).data,
+    enabled,
+  });
+}
+
+export type UserPayload = {
+  username: string;
+  password?: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  role?: "admin" | "staff";
+  active?: boolean;
+};
+
+export function useSaveUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, payload }: { id?: string; payload: UserPayload }) =>
+      (id ? await api.put(`/users/${id}`, payload) : await api.post("/users", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: async ({ id, new_password }: { id: string; new_password: string }) =>
+      (await api.patch(`/users/${id}/password`, { new_password })).data,
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/users/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
 }
 
 /* --------------------------------- settings -------------------------------- */

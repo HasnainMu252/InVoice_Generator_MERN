@@ -142,10 +142,50 @@
     border-color: var(--color-border);
   }
 
+  html {
+    /*
+     * Pins the root to 16px and disables mobile/WebKit text auto-inflation.
+     * Without this the browser can "boost" font sizes on some devices and on
+     * servers that report an unusual viewport, which makes the whole app look
+     * zoomed in even though nothing changed.
+     */
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /*
+   * Belt-and-braces against the collapsed-column rendering seen on some mobile
+   * browsers: grid and flex children default to min-width:auto, which lets an
+   * over-wide child (a chart SVG, a table) drag the whole track out of shape.
+   */
+  .recharts-responsive-container {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Stops a stray wide element from side-scrolling the whole page on phones. */
+    overflow-x: hidden;
+  }
+
+  /* Prevents iOS Safari zooming the page when a form field is focused. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: inherit;
+    }
   }
 
   h1,

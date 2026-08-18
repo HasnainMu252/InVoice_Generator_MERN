@@ -31,26 +31,34 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border bg-card p-5 shadow-card transition-shadow hover:shadow-elevated",
+        "rounded-2xl border border-border bg-card p-3.5 shadow-card transition-shadow hover:shadow-elevated sm:p-5",
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+      {/* Icon stays on the same row as the text at every width so the card reads
+          as a compact horizontal tile on phones instead of a tall stacked block. */}
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground sm:text-[11px] sm:tracking-[0.12em]">
             {label}
           </p>
-          <p className="stat-figure mt-2 truncate text-2xl font-bold text-foreground">{value}</p>
-          {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+          <p className="stat-figure mt-1.5 truncate text-lg font-bold text-foreground sm:mt-2 sm:text-2xl">
+            {value}
+          </p>
+          {hint ? (
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground sm:mt-1 sm:text-xs">
+              {hint}
+            </p>
+          ) : null}
         </div>
         {Icon ? (
           <span
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl",
               toneRing,
             )}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>
         ) : null}
       </div>

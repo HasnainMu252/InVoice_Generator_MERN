@@ -8,11 +8,13 @@ import {
   Receipt,
   Settings as SettingsIcon,
   ShoppingCart,
+  UserCog,
+  Users,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import CGSLOGO from "../assets/CGSLOGO.png";
+import CGSLOGO from "../assets/cgsWhite.svg";
 
 import { Logo, LogoLockup } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
@@ -44,7 +46,11 @@ const NAV: Array<NavItem | NavGroup> = [
   },
   { label: "Reports", to: "/reports", icon: BarChart3 },
   { label: "Settings", to: "/settings", icon: SettingsIcon },
+  { label: "My Profile", to: "/profile", icon: UserCog },
 ];
+
+/** Appended only for administrators. */
+const ADMIN_NAV: NavItem[] = [{ label: "User Management", to: "/users", icon: Users }];
 
 function isGroup(entry: NavItem | NavGroup): entry is NavGroup {
   return "items" in entry;
@@ -53,7 +59,7 @@ function isGroup(entry: NavItem | NavGroup): entry is NavGroup {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
 
   const active = (to: string, exact?: boolean) =>
     exact ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
@@ -74,12 +80,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
-      <div className="flex items-center gap-2 border-b border-sidebar-border px-5 py-5">
-        <img src={CGSLOGO}></img>
+      <div className="flex items-center gap-2 border-b border-sidebar-border px-5 py-5 rounded-lg">
+        <img src={CGSLOGO}  className="rounded-lg"></img>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {NAV.map((entry) =>
+        {[...NAV, ...(isAdmin ? ADMIN_NAV : [])].map((entry) =>
           isGroup(entry) ? (
             <div key={entry.label} className="pt-2">
               <div className="flex items-center gap-2 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/45">
@@ -113,19 +119,21 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       <div className="border-t border-sidebar-border p-4">
-        <div className="mb-3 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sidebar-accent text-xs font-bold text-sidebar-accent-foreground">
-            CGS
+        <Link
+          to="/profile"
+          onClick={onNavigate}
+          className="mb-3 flex items-center gap-3 rounded-lg p-1 text-black transition-colors hover:bg-white/60 hover:text-white"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-bold text-sidebar-accent-foreground">
+            {(user?.username ?? "CGS").slice(0, 2).toUpperCase()}
           </div>
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-sidebar-primary">
-              {user?.username ?? "CGS123"}
+              {user?.username ?? "—"}
             </div>
-            <div className="truncate text-[11px] text-sidebar-foreground/60">
-              {user?.full_name ?? "Administrator"}
-            </div>
+            
           </div>
-        </div>
+        </Link>
         <Button
           variant="outline"
           size="sm"

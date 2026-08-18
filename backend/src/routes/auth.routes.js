@@ -28,6 +28,12 @@ router.post(
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
+    if (user.active === false) {
+      return res.status(403).json({ message: "This account has been deactivated." });
+    }
+
+    user.last_login_at = new Date();
+    await user.save({ validateBeforeSave: false });
 
     return res.json({ token: signToken(user), user: user.toJSON() });
   }),
@@ -54,6 +60,21 @@ router.post(
     user.password = new_password;
     await user.save();
     return res.json({ message: "Password updated" });
+  }),
+);
+
+/** Self-service profile update. Role and active status are deliberately not editable here. */
+router.put(
+  "/profile",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { full_name, email, phone } = req.body ?? {};
+    const user = await User.findById(req.user._id);
+    if (full_name !== undefined) user.full_name = full_name;
+    if (email !== undefined) user.email = email;
+    if (phone !== undefined) user.phone = phone;
+    await user.save();
+    return res.json({ user: user.toJSON() });
   }),
 );
 

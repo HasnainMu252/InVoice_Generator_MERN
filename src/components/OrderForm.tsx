@@ -42,6 +42,7 @@ export function OrderForm({ existing }: { existing?: Order }) {
     order_code: existing?.order_code ?? "",
     order_date: existing?.order_date ?? today(),
     details: existing?.details ?? "",
+    company: existing?.company ?? "",
     contact_person: existing?.contact_person ?? "",
     contact_number: existing?.contact_number ?? "",
     total_amount: String(existing?.total_amount ?? ""),
@@ -76,9 +77,11 @@ export function OrderForm({ existing }: { existing?: Order }) {
 
   const totalExpense = useMemo(() => rows.reduce((sum, r) => sum + toNum(r.amount), 0), [rows]);
 
+  // Total Profit = Total Order Amount − Total Expense Amount − Tax.
+  // Tax is collected for the government, so it is not business earnings.
   const totalProfit = useMemo(
-    () => toNum(draft.total_amount) - totalExpense,
-    [draft.total_amount, totalExpense],
+    () => toNum(draft.total_amount) - totalExpense - toNum(draft.tax),
+    [draft.total_amount, draft.tax, totalExpense],
   );
 
   const submit = async () => {
@@ -94,6 +97,7 @@ export function OrderForm({ existing }: { existing?: Order }) {
       order_code: draft.order_code.trim(),
       order_date: draft.order_date || today(),
       details: draft.details,
+      company: draft.company.trim(),
       contact_person: draft.contact_person,
       contact_number: draft.contact_number,
       total_amount: toNum(draft.total_amount),
@@ -154,10 +158,19 @@ export function OrderForm({ existing }: { existing?: Order }) {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Contact Person</Label>
+              <Label>Person Name</Label>
               <Input
                 value={draft.contact_person}
                 onChange={(e) => set("contact_person", e.target.value)}
+                placeholder="Ahmed Raza"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Company Name</Label>
+              <Input
+                value={draft.company}
+                onChange={(e) => set("company", e.target.value)}
+                placeholder="Meezan Technologies"
               />
             </div>
             <div className="space-y-1.5">
@@ -165,6 +178,7 @@ export function OrderForm({ existing }: { existing?: Order }) {
               <Input
                 value={draft.contact_number}
                 onChange={(e) => set("contact_number", e.target.value)}
+                placeholder="+92 300 1234567"
               />
             </div>
             <div className="space-y-1.5">
@@ -225,7 +239,7 @@ export function OrderForm({ existing }: { existing?: Order }) {
                 }`}
               />
               <p className="text-[11px] text-muted-foreground">
-                Total Order Amount − Total Expense Amount.
+                Total Order Amount − Total Expense Amount − Tax.
               </p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
@@ -351,14 +365,16 @@ export function OrderForm({ existing }: { existing?: Order }) {
             <span className="stat-figure font-semibold">{formatPKR(draft.total_amount)}</span>
           </div>
           <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-foreground">Total Expense</span>
+            <span className="text-muted-foreground">Less: Total Expense</span>
             <span className="stat-figure font-semibold text-destructive">
-              {formatPKR(totalExpense)}
+              −{formatPKR(totalExpense)}
             </span>
           </div>
-          <div className="flex justify-between py-1.5 text-sm">
-            <span className="text-muted-foreground">Tax</span>
-            <span className="stat-figure font-semibold">{formatPKR(draft.tax)}</span>
+          <div className="flex justify-between border-b border-border py-1.5 pb-2.5 text-sm">
+            <span className="text-muted-foreground">Less: Tax</span>
+            <span className="stat-figure font-semibold text-destructive">
+              −{formatPKR(draft.tax)}
+            </span>
           </div>
           <div className="mt-3 flex items-center justify-between rounded-xl bg-primary px-4 py-3 text-primary-foreground">
             <span className="text-xs font-semibold uppercase tracking-[0.12em]">Total Profit</span>

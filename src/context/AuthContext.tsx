@@ -3,13 +3,25 @@ import type { ReactNode } from "react";
 
 import { api, clearToken, getToken, setToken } from "@/lib/api";
 
-export type AuthUser = { id: string; username: string; full_name: string; role: string };
+export type AuthUser = {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  role: "admin" | "staff";
+  active: boolean;
+  last_login_at: string | null;
+};
 
 type AuthValue = {
   user: AuthUser | null;
   loading: boolean;
+  /** True only for the admin role — staff can do everything except manage users. */
+  isAdmin: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  setUser: (user: AuthUser) => void;
 };
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -45,7 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout]);
+  const value = useMemo(
+    () => ({ user, loading, isAdmin: user?.role === "admin", login, logout, setUser }),
+    [user, loading, login, logout],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
